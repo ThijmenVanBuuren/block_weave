@@ -10,7 +10,7 @@ When you start using many different instances of language models, handling many 
 I also like to use it for quickly making complex prompts and copy pasting them in ChatGPT.
 
 ## Overview
-<img src="images/overview.jpg">
+![](https://github.com/ThijmenVanBuuren/block_weave/raw/main/images/overview.jpg)
 
 `Agent` is essentially a prompt template that can receive a list of `Block`s, of the given `BlockType`s (here `BlockType("Input")`). It calls a language model and returns `Block`s of the output block types (here `BlockType("Output")`).
 
@@ -18,7 +18,7 @@ I also like to use it for quickly making complex prompts and copy pasting them i
 
 `BlockType` is analogous to `type` in Python like `int` or `str`, but a `BlockType` always indicates the type of a piece of text. E.g. in `Block(block_type="Topic", content="Python programming")`, the content "Python programming" has the type "Topic", because it's in a `Block` of block_type "Topic".
 
-<img src="images/agent_fit.jpg">
+![](https://github.com/ThijmenVanBuuren/block_weave/raw/main/images/agent_fit.jpg)
 
 Only an agent with the same output type as the input type of the other agent can pass its output to another agent. Since `Agent C` has a different output type, than the input type of `Agent D`, the output of `Agent C` cannot be given to `Agent D`.
 
@@ -36,7 +36,8 @@ In block_weave we explicitly define the input types and output types, as `input_
 In this example we will make an agent that generates research questions, given a topic.
 
 Schematic view:
-<img src="images/demo_agent.jpg">
+
+![](https://github.com/ThijmenVanBuuren/block_weave/raw/main/images/demo_agent.jpg)
 
 Code:
 
