@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling", "python-dotenv", "langchain_openai", "ollama"]
+build-backend = "hatchling.build"
+
+[project]
+name = "block_weave"
+version = "0.0.1"
+authors = [
+  { name="Thijmen van Buuren", email="thijmendeveloper@gmail.com" },
+]
+description = "Build prompts like lego blocks and weave them through code like regular functions"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License"
+]
+dependencies = [
+    "python-dotenv",
+    "langchain_openai",
+    "ollama"
+]
+
+[project.urls]
+Homepage = "https://github.com/ThijmenVanBuuren/block_weave"
+Issues = "https://github.com/ThijmenVanBuuren/block_weave/issues"
