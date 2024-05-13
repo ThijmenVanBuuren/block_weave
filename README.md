@@ -1,15 +1,26 @@
 # tldr
 `pip install block_weave`
 # About
-Welcome to BlockWeave! This project aims to inspire creative connections between "regular" code, language models and programmers by:
-- Creating reliable input and output in language models - by introducing types in prompts.
-- Simplify prompt writing by writing prompts more like code.
-- Making it fun to build, use and connect language models.
-## Cool, but why?
-When you start using many different instances of language models, handling many prompts gets unwieldy, annoying, and makes it difficult to track compounding errors throughout the system. This project aims to solve all, by simplifying prompt writing and management, and creating limits of what can go in and out of an LLM, by adding types into prompts. Types can also allow additional functionality to be built on top of them.
-I also like to use it for quickly making complex prompts and copy pasting them in ChatGPT.
+Welcome to block_weave! An experimental project for increasing language model predictability and ease of use, with the goal of making systems with many interacting language models (agents) easier and more fun to manage. It explores the questions:
+- **What if prompts had types?** 
+- **What if we could write prompts just like code?**
 
 ## Overview
+This project adds types to prompts from language models, using three classes: `Block`, `BlockType`, `Agent`, this way language model input and output becomes more like regular functions.
+
+Just like this function can only receive a `string`, and return and `int`, we can wrap specific parts of language model input/output to simulate them having specific types.
+```python
+def example_function(hi: str) -> int:
+	return 1
+```
+An agent function essentially does this:
+```python
+def agent_function(block: BlockType("Input")) -> BlockType("Output"):
+	block_output = agent(block)
+	return block_output
+```
+
+
 ![](https://github.com/ThijmenVanBuuren/block_weave/raw/main/images/overview.jpg)
 
 `Agent` is essentially a prompt template that can receive a list of `Block`s, of the given `BlockType`s (here `BlockType("Input")`). It calls a language model and returns `Block`s of the output block types (here `BlockType("Output")`).
@@ -17,6 +28,7 @@ I also like to use it for quickly making complex prompts and copy pasting them i
 `Block` is a container for input or output text, with a specific `BlockType`.
 
 `BlockType` is analogous to `type` in Python like `int` or `str`, but a `BlockType` always indicates the type of a piece of text. E.g. in `Block(block_type="Topic", content="Python programming")`, the content "Python programming" has the type "Topic", because it's in a `Block` of block_type "Topic".
+
 
 ![](https://github.com/ThijmenVanBuuren/block_weave/raw/main/images/agent_fit.jpg)
 
@@ -35,11 +47,30 @@ git clone git@github.com:ThijmenVanBuuren/block_weave.git
 In block_weave we explicitly define the input types and output types, as `input_blocks` and `output_blocks`
 In this example we will make an agent that generates research questions, given a topic.
 
+Function view:
+```python
+def agent_topic_to_rq(topic_block: BLOCK_TYPE_TOPIC) -> BLOCK_TYPE_RESEARCH_QUESTIONS:
+	'''
+	Creates 5 research questions related to the topic
+	Args:
+		topic_block: BLOCK_TYPE_TOPIC
+			The topic for which the research questions are created
+		
+	Returns:
+		rq_block: BLOCK_TYPE_RESEARCH_QUESTIONS
+			5 research questions related to the topic
+	'''
+	1. Analyze topic_block
+	2. rq_block = Create 5 research questions
+
+	return rq_block
+```
+
 Schematic view:
 
 ![](https://github.com/ThijmenVanBuuren/block_weave/raw/main/images/demo_agent.jpg)
 
-Code:
+
 
 Imports
 ```python
@@ -62,12 +93,12 @@ summary = "Creates 5 research questions related to the topic"
 # agent signature
 # variable blocks for input
 # indicate the types like we would with variables
-block_topic = BlockType("Topic")
-input_block_types = [block_topic]
+BLOCK_TYPE_TOPIC = BlockType("Topic")
+input_block_types = [BLOCK_TYPE_TOPIC]
 
 # return type
-block_rqs = BlockType("ResearchQuestions")
-output_block_types = [block_rqs]
+BLOCK_TYPE_RESEARCH_QUESTIONS = BlockType("ResearchQuestions")
+output_block_types = [BLOCK_TYPE_RESEARCH_QUESTIONS]
 
 # example of input
 # Index the same as input and output block types
@@ -112,7 +143,7 @@ Input a block
 # The topic we want research questions for
 topic = "Eastern religions and technology"
 # Same BlockType as defined above
-inp_block = Block(block_type=block_topic, content=topic)
+inp_block = Block(block_type=BLOCK_TYPE_TOPIC, content=topic)
 ```
 
 Show the prompt

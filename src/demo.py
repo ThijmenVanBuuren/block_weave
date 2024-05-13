@@ -9,7 +9,32 @@ BLOCK_TYPE_SEARCH_CRITERIA = BlockType("SearchCriteria")
 
 class TopicToResearchQuestions(Agent):
 
-	def __init__(self):
+	def __init__(self, n_questions=5):
+		"""
+		def agent_topic_to_rq(topic_block: BLOCK_TYPE_TOPIC) -> BLOCK_TYPE_RESEARCH_QUESTIONS:
+			'''
+			Creates 5 research questions related to the topic
+			Args:
+				topic_block: BLOCK_TYPE_TOPIC
+					The topic for which the research questions are created
+				
+			Returns:
+				rq_block: BLOCK_TYPE_RESEARCH_QUESTIONS
+					5 research questions related to the topic
+			'''
+			1. Analyze topic_block
+			2. rq_block = Create 5 research questions
+
+			return rq_block
+    
+		# Example
+		topic_text = "A topic for research here"
+		topic_block = Block(block_type=BLOCK_TYPE_TOPIC, content=topic_text)
+		out = agent_rq_topic(input_example)
+		print(out)
+		==> "1. RQ1\n2. RQ2\n3. RQ3\n4. RQ4\n5. RQ5"
+		"""
+
 		# Generate research questions
 
 		# Who's performing the task?
@@ -17,7 +42,7 @@ class TopicToResearchQuestions(Agent):
 		role = "Expert scientific researcher"
 		# what the agent function does
 		# This is what you would write as the first line in a docstring
-		summary = "Creates 5 research questions related to the topic"
+		summary = f"Creates {n_questions} research questions related to the topic"
 
 		# agent signature
 		# variable blocks for input
@@ -131,17 +156,19 @@ if __name__ == "__main__":
 	# Agent 1
 	topic_agent = TopicToResearchQuestions()
 	
-	topic = "Eastern religions and technology" #"GDPR and speech data"
+	# Fill in a topic here
+	topic = "Eastern religions and technology" 
 	inp_block = Block(block_type=BLOCK_TYPE_TOPIC,
 			content=topic)
 
 
 	full_prompt = topic_agent.get_full_prompt(inp_block)
-	# print(full_prompt)
+	print(full_prompt)
 
 	# Mock output
 	research_questions = topic_agent.mock_call(inp_block)
-	# print((type(research_questions())))
+	print("--------------")
+	print(research_questions)
 
 	# LLM output
 	research_questions = topic_agent(inp_block, llm=llm)
