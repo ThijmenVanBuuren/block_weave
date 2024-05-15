@@ -11,75 +11,40 @@ from .block import Block
 class Agent:
     def __init__(
         self,
-        role: str,
-        summary: str,
         input_block_types: List[BlockType],
         output_block_types: List[BlockType],
-        input_block_names: List[str],
-        output_block_names: List[str],
-        input_example: List[str],
-        output_example: List[str],
-        algorithm: List[str],
+        prompt_template: str,
         default_llm = None,
-        prompt_template_path=str(Path(__file__).resolve().parent)+os.sep+"prompt_templates/basic1.md",
     ):
         """
         Creates an agent function
-        Prepares input to be called with an llm
-        Args:
-            role: str
-                Assigned role of agent. E.g. 'An expert programmer'
-            task: str
-                What the agent function does, written like the first line of a docstring. E.g. 'Writes test code given a python function'
+        Agent can only be called with the given block types
+
             input_block_types: List[(str, Block)]
                 Input arguments of the agent function.
                 List[(variable_name, BlockType)]
             output_block_types: List[(str, Block)]
                 List[(variable_name, BlockType)]
                 Return arguments of the agent function.
-            input_block_names: List[str]
-                List of the names of the input blocks. E.g. ['input_block']
-            output_block_names: List[str]
-                List of the names of the output blocks. E.g. ['output_block']
-            input_example: List[str]
-                TODO: give programmer example
-                Example of the input arguments. E.g. ['GDPR and speech data']
-            output_example: List[str]
-                TODO: give programmer example
-                Example of the return arguments. E.g. ['1. RQ1 2. RQ2 3. RQ3 4. RQ4 5. RQ5']
-            algorithm:
             default_llm:
                 llm to run agent with if No llm is provided in __call__
                 Assumed to be callable as: llm(input_text)
         """
         # TODO: order according to the order of a function
 
+        input_block_names, input_block_types = zip(*input_block_types.items())
+        output_block_names, output_block_types = zip(*output_block_types.items())
+
         # Input variable types
-        self.input_block_types = input_block_types
+        self.input_block_types = list(input_block_types)
         # Return variable types
-        self.output_block_types = output_block_types
+        self.output_block_types = list(output_block_types)
 
-        # Input variable names
-        self.input_block_names = input_block_names
-        # Return variable names
-        self.output_block_names = output_block_names
+        self.input_block_names = list(input_block_names)
+        self.output_block_names = list(output_block_names)
 
-        # Load agent data
-        self.loader = DataLoader()
-
-        # Agent function outline
-        prompt_template = self._get_prompt_template(prompt_template_path)
-
-        # Agent function before filling in the input blocks
-        # TODO: check that expected variables are in the prompt_template
-        self._function_prompt = self._get_function_prompt(
-            role=role,
-            summary=summary,
-            input_example=input_example,
-            output_example=output_example,
-            algorithm=algorithm,
-            prompt_template=prompt_template,
-        )
+        # TODO: format output blocks
+        self.prompt_template = self._format_prompt_template(prompt_template)
 
         # LLM to use if none is given in __call__
         self.default_llm = default_llm
@@ -88,7 +53,7 @@ class Agent:
         return self._run(blocks=blocks, llm=llm)
 
     def __str__(self):
-        return self._function_prompt
+        return self.prompt_template
     
     def mock_call(self, blocks=None, llm=None):
         """Return fake output for testing"""
@@ -176,130 +141,65 @@ class Agent:
         # Allow single block, no list input
         blocks = self._block_to_list(blocks)
 
-        str_blocks = self._str_join_blocks(blocks, self.input_block_names)
-        full_prompt = self._function_prompt.format(input_blocks=str_blocks)
+        # Match variable names to input blocks
+        blocks_dict = self._get_dict_from_names_and_blocks(names=self.input_block_names,
+                                                blocks=blocks)
+
+        # # Activate blocks
+        # for n, b in blocks_dict:
+        #     blocks_dict[n] = b(name=n)
+        # Only get content of blocks
+        for n, b in blocks_dict.items():
+            blocks_dict[n] = b.content
+
+        # Get prompt for LLM
+        full_prompt = self.prompt_template.format(**blocks_dict)
 
         return full_prompt
-
-    def _get_function_prompt(
-        self,
-        role: str,
-        summary: str,
-        input_example: List[str],
-        output_example: List[str],
-        algorithm: List[str],
-        prompt_template: str,
-    ):
-        """
-        Fills in the variables in the prompt template and returns it
-        Only the input_blocks are not filled in, as these are not known yet
+    
+    def _format_prompt_template(self, prompt_template: str):
+        """Fill in output blocks
 
         Args:
-            role (str): _description_
-            task (str): _description_
-            input_example (str): _description_
-            output_example (str): _description_
-            algorithm (List[str]): _description_
             prompt_template (str): _description_
 
         Returns:
-            str: prompt with variables filled in
+            _type_: _description_
         """
+        input_block_types_dict = {name: "{"+name+"}" for name in self.input_block_names}
 
-        # Get examples as blocks
-        # Assumes examples are in the same order as the block types
-        input_example_blocks = self._example_to_block(
-            input_example, self.input_block_types
-        )
-        output_example_blocks = self._example_to_block(
-            output_example, self.output_block_types
-        )
-
-        output_blocks = self._example_to_block(
-            ["ANSWER HERE"], self.output_block_types
-        )
-
-        str_alg = "\n".join(algorithm)  # Todo: format in some way?
-
-        prompt = prompt_template.format(
-            role=role,
-            task=summary,
-            input_example=self._str_join_blocks(input_example_blocks, block_names=self.input_block_names),
-            output_example=self._str_join_blocks(output_example_blocks, block_names=self.output_block_names),
-            algorithm=str_alg,
-            input_blocks="{input_blocks}",
-            output_blocks=self._str_join_blocks(output_blocks, block_names=self.output_block_names),
-        )
-
-        return prompt
-
-    def _get_prompt_template(self, template_path):
-        """return the prompt template"""
-        # todo: prompt template as text here, but load it from a md file, such that the template can be changed easily if desired
-        # return the prompt template
-        template = self.loader.read_utf8_file(template_path)
-
-        return template
-
-    @staticmethod
-    def _str_join_blocks(blocks, block_names=None):
-        """
-            Instantiate blocks as string and join them
-            Args:
-                blocks: List[Block]
-                block_names: List[str]
-            Returns:
-                str: blocks joined as string
-        ."""
-        if block_names is not None:
-            assert len(blocks) == len(
-                block_names
-            ), f"Expected {len(block_names)} block names, but got {len(blocks)}"
-            str_blocks = [b(n) for b, n in zip(blocks, block_names)]
-        else:
-            str_blocks = [b() for b in blocks]
-
-        return "\n".join(str_blocks)
-    
-    @staticmethod
-    def _str_join_block_types(block_types):
-        """
-            Instantiate blocks as string and join them
-            Args:
-                blocks: List[Block]
-                block_names: List[str]
-            Returns:
-                str: blocks joined as string
-        ."""
-        return "\n".join([b() for b in block_types])
-
-    @staticmethod
-    def _example_to_block(example: List[str], block_types: List[BlockType]):
-        """
-        Convert example string to block
-        Args:
-            example: str
-            e.g. ["GDPR and speech data", "Another input"]
-            block_type: BlockType
-
-        Returns:
-            Block: block with the content of the example
-        """
+        output_blocks_dict = self._get_dict_from_names_and_blocks(names=self.output_block_names, 
+                                                         blocks=self.output_block_types)
         
-        if isinstance(example, str):
-            # Assume a single example was given, convert to a list
-            example = [example]
+        # Fill in blocks
+        content = "ANSWER HERE"
+        for n, bt in output_blocks_dict.items():
+            block = Block(block_type=bt,
+                          content=content)
+            output_blocks_dict[n] = block(name=n)
 
-        example_blocks = []
-        for e, bt in zip(example, block_types):
-            example_blocks.append(Block(block_type=bt, content=e))
-        return example_blocks
+        # Combine all blocks
+        blocks_dict = input_block_types_dict | output_blocks_dict
+
+        # Format template
+        format_prompt = prompt_template.format(**blocks_dict)
+        
+        return format_prompt
     
     @staticmethod
     def _block_to_list(blocks: Union[Block, List[Block]]):
         if not isinstance(blocks, list):
             blocks = [blocks]
         return blocks
+    
+    @staticmethod
+    def _get_dict_from_names_and_blocks(names: List[str], blocks: List[Block]):
+        # return dict with names as keys and blocks as values
+        # -> Could be any value really
+        blocks_zip = zip(names, blocks)
+        blocks_dict = {name: block for name, block in blocks_zip}
+
+        return blocks_dict
 
     # Input type checking. Make this in a different class? Could possibly be reused by Block, BlockType and Agent.
     def _check_blocks_correct(self, blocks: List[Block], block_types: List[BlockType]) -> bool:
@@ -402,80 +302,4 @@ class Agent:
 
 
 if __name__ == "__main__":
-    # Test showing prompt
-
-    # Who's performing the task?
-    # Use a description
-    role = "Expert scientific researcher"
-    # what the agent function does
-    # This is what you would write as the first line in a docstring
-    task = "Creates 5 research questions related to the topic"
-
-    # agent signature
-    # variable blocks for input
-    # indicate the types like we would with variables
-    block_topic = BlockType("Topic")
-    input_block_types = [block_topic]
-
-    # return type
-    block_rqs = BlockType("ResearchQuestions")
-    output_block_types = [block_rqs]
-
-    # example of input
-    # TODO: one example for each input and output block
-    input_example = ["GDPR and speech data"]
-    output_example = [
-        "1. RQ1 \
-2. RQ2 \
-3. RQ3 \
-4. RQ4 \
-5. RQ5"
-    ]
-
-    # Block variable names
-    topic_block = "topic_block"
-    input_block_names = [topic_block]
-    rq_block = "rq_block"
-    output_block_names = [rq_block]
-
-    # The code of the function
-    # Line by line what happens in this algorithm
-    # reference the variables
-    # TODO: better way to refer to the input and output blocks. Can e.g. be a separate class, get input and output blocks as input OR in the agent class we just check if all input and output variables are referenced.
-    algorithm = [
-        f"1. Analyze '{topic_block}'",
-        "2. Create 5 research questions",
-        f"3. return the research questions as BlockType {block_rqs} '{rq_block}'",
-    ]
-
-    # init agent
-    agent = Agent(
-        role=role,
-        summary=task,
-        input_block_types=input_block_types,
-        output_block_types=output_block_types,
-        input_block_names=input_block_names,
-        output_block_names=output_block_names,
-        input_example=input_example,
-        output_example=output_example,
-        algorithm=algorithm,
-    )
-
-    # Show prompt in 2 ways:
-
-    # 1. Before filling in the input blocks
-    function_prompt = str(agent)
-
-    # print(function_prompt)
-
-    # Get agent output
-    inp = Block(block_type=block_topic, content="GDPR and speech data")
-
-    # 2. Full prompt
-    full_prompt = agent.get_full_prompt([inp])
-    print(full_prompt)
-
-    # 3 prompts:
-    # 1. Template prompt
-    # 2. Prompt with variables (function prompt)
-    # 3. Prompt with input blocks (full prompt)
+    pass
