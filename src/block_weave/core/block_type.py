@@ -1,17 +1,19 @@
 import re
-
+from langchain import output_parsers
 
 class BlockType:
     # Track unique BlockType names
     _names = set()
 
-    def __init__(self, name: str, delimiter=("|---", "---|")): # delimiter=("<block>", "</block>")):#
+    def __init__(self, name: str, delimiter=("<<BEGIN_BLOCK>>", "<<END_BLOCK>>"), parser=None): #delimiter=("|---", "---|")):
         """
         Initializes a new instance of the BlockType class.
 
         Args:
             name (str): The name of the block type.
             delimiter (tuple, optional): The delimiters used for the block. Defaults to ("{", "}").
+            parser (str, object, optional): Any string representing the structure of this block or a langchain supported parser,
+                Or other parser with ".get_format_instructions()"
         """
         assert (
             name not in self._names
@@ -21,10 +23,25 @@ class BlockType:
         self.name = name
         self.block_start = "## @Block"
         self.delimiter = delimiter
+        self._parser = parser 
 
         # Block placeholders
         # self.placeholder_block_name = "{block_name}"
         # self.placeholder_content = "{content}"
+
+    @property
+    def parse(self) -> str: 
+        # Return format of this block_type
+        # Assumes the schema is either a string, 
+        # Or has a function "get_format_instructions()"
+
+        if isinstance(self._parser, str):
+            return self._parser
+
+        # try:
+        return self._parser.get_format_instructions()
+        # except Exception as e:
+        #     raise(e, "Failed to get schema. Make sure it is a string or has a 'get_format_instructions' function ")
 
     def __call__(self) -> str:
         return self._get()

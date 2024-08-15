@@ -87,7 +87,7 @@ class Block:
 # TODO: Limits on block names and block type names, such that there are no spaces and maybe always camelcase. Have a separate function which is used both by the block_type, the block and anything else that needs a name limit. --> determine based on function naming rules of python
 
 if __name__ == "__main__":
-    block_type1 = BlockType("testBlockType")
+    block_type1 = BlockType("TestBlockType")
     block = Block(block_type1, "This is the content!")
     print(block)
 

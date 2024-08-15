@@ -19,110 +19,12 @@ V2:
     - Block indicator only shown for custom format.
 
 """
-
-class SimpleAgent:
-
-    def __init__(self, prompt_template, schema):
-
-        self.schema = schema
-
-        self.pydantic_parser = PydanticOutputParser(pydantic_object=self.schema)
-        format_instructions = self.pydantic_parser.get_format_instructions()
-
-        self.prompt = ChatPromptTemplate.from_template(
-            template=prompt_template,
-            partial_variables = {
-                # Mandatory field
-                # TODO: we get it from the BlockType
-                "format_instructions": format_instructions,
-            }
-        )
-
-    def __call__(self, inp_dict, llm, do_parse=True):
-        """Runs the agent by filling in args in inp_dict in prompt,
-            and calling the llm
-
-        Args:
-            inp (dict): dict of text arguments
-                "argument_name_in_prompt": "argument"
-            llm (_type_): _description_
-            do_parse (bool, optional): _description_. Defaults to True.
-
-        Returns:
-            parsed pydantic output
-        """
-        
-        prompt = self.prompt.format(**inp_dict)
-        # print(prompt)
-
-        output = llm(prompt)
-
-        if do_parse:
-            return self.parse(output=output, llm=llm)
-
-        return output
-
-    def parse(self, output, llm, max_retries=1):
-        # Allow any LLM to be used in Langchain
-        wrapped_llm = RunnableLambda(llm)
-
-        # Fix output according to schema and with retries
-        fix_parser = OutputFixingParser.from_llm(parser=self.pydantic_parser, llm=wrapped_llm, max_retries=max_retries)
-
-        # TODO: Retry agent
-
-        parsed_output = fix_parser.parse(output)
-
-        return parsed_output
-
-def agent_select_chunk_workflow(text, llm):
-    # Returns true/false if the chunk contains information relevant for 
-    # Constructing a workflow
-
-    # Make schema
-    class YesNoSchema(BaseModel):
-        answer: bool = Field(description="Yes or No answer to the question")
-
-    # When is information in the text relevant for a data analysis workflow?
-    # It must contain:
-    # - Info about a data analysis step for processing CryoEM data.
-    #   This includes: 
-    #   - references to specific analysis job use (e.g. motionCor, 3D classification, among others)
-    #   - Software packages used: (e.g. Relion, CryoSparc among others)
-    #   - Any other reference to data analysis steps for CryoEM data.
-
-
-    # Prompt template and input
-    prompt_template = f"""
-Assume the role of a Cryo Electron Microscopy (CryoEM) expert and expert on CryoEM data analysis.
-You're determining if the "input text" below is relevant for CryoEM data analysis steps
-
-Use this to determine if a text is relevant:
-It must contain:
-- Info about a data analysis step for processing CryoEM data.
-    This includes: 
-    - references to specific analysis job use (e.g. motionCor, 3D classification, among others)
-    - Software packages used: (e.g. Relion, CryoSparc among others)
-
-# Output format instructions:
-{{format_instructions}}
-
-# Input text:
-{{text}}
-    """
-
-    # Init agent
-    agent = SimpleAgent(prompt_template=prompt_template, schema=YesNoSchema)
-
-    inp = {"text": text,
-           }
-
-    # TODO: it fails quite often to parse to boolean
-
-    return agent(inp, llm=llm).answer
-
 BLOCK_TYPE_TOPIC = BlockType("Topic")
-BLOCK_TYPE_RESEARCH_QUESTIONS = BlockType("ResearchQuestions")
+
+class ResearchQuestionsSchema(BaseModel):
+    research_questions: list[str] = Field(description="A list of research questions")
+BLOCK_TYPE_RESEARCH_QUESTIONS = BlockType("ResearchQuestions", parser=PydanticOutputParser(pydantic_object=ResearchQuestionsSchema))
+
 BLOCK_TYPE_SEARCH_CRITERIA = BlockType("SearchCriteria")
 
 class TopicToResearchQuestions(Agent):
@@ -172,66 +74,70 @@ print(out)
                          )
           
 class ResearchQuestionsToSearchCriteria(Agent):
-	
-	def __init__(self):
-		##############
-		# Establish search criteria
-		##############
+    # TODO: input and output example. See demo.py
+    def __init__(self, n_criteria=3):
+        rq_block = "rq_block"
+        criteria_block = "criteria_block"
+        input_block_types = {
+            rq_block: BLOCK_TYPE_RESEARCH_QUESTIONS
+        }
+        output_block_types = {
+            criteria_block: BLOCK_TYPE_SEARCH_CRITERIA
+        }
+        prompt_template = f"""
+Assume the role of an algorithm of an expert scientific researcher. 
+You will behave like the agent_rq_to_criteria algorithm, below, which converts input_blocks into output blocks:
 
-		# Who's performing the task?
-		# Use a description 
-		role = "Expert scientific researcher"
-		# what the agent function does
-		# This is what you would write as the first line in a docstring
-		summary = "Establishes initial search criteria"
+def agent_rq_to_criteria({rq_block}: BLOCK_TYPE_RESEARCH_QUESTIONS) -> BLOCK_TYPE_SEARCH_CRITERIA:
+    '''
+    Establishes initial search criteria based on research questions
+    Args:
+        {rq_block}: BLOCK_TYPE_RESEARCH_QUESTIONS
+            The research questions to establish search criteria from
+    Returns:
+        {criteria_block}: BLOCK_TYPE_SEARCH_CRITERIA
+            The initial search criteria
+    '''
+    1. Determine the scope of the search criteria for the {rq_block}
+    2. Create a set of {n_criteria} search criteria that fits the domain and subject of the {criteria_block}
 
-		# agent signature
-		# variable blocks for input
-		# Defined in previous cell
-		input_block_types = [BLOCK_TYPE_RESEARCH_QUESTIONS]
+    return {criteria_block}
+    
+# Example:
 
-		# return type
-		output_block_types = [BLOCK_TYPE_SEARCH_CRITERIA]
 
-		# Block variable names
-		rq_block = "rq_block"
-		input_block_names = [rq_block]
-		criteria_block = "criteria_block"
-		output_block_names = [criteria_block]
+# HERE IS YOUR INPUT:
+rq_text = '{{rq_block}}'
+rq_block = Block(block_type=BLOCK_TYPE_RESEARCH_QUESTIONS, content=rq_text)
+out = agent_rq_to_criteria(rq_block)
 
-		# The code of the function
-		# Line by line what happens in this algorithm
-		# reference the variables
-		algorithm = [f"Determine the scope of the search criteria for the {rq_block}",
-					f"Create a set of search criteria that fits the domain and subject of the {criteria_block}"]
+# Give your answer:
+print(out)
+==> 
+{{criteria_block}}
+"""
+        super().__init__(input_block_types=input_block_types,
+                         output_block_types=output_block_types,
+                         prompt_template=prompt_template,
+                         )
+        
 
-		# example of input
-		input_example = """
-		- How can Automatic Speech Recognition (ASR) comply with the GDPR?
-		- How can Text to speech technologies comply with the GDPR?
-		- What tools are being developed to help Automatic Speech Recognition systems comply with the GDPR?
-		- What privacy preserving Automatic Speech Recognition technologies exist that could aid in developing responsible AI that complies with the GDPR?
-		- How to encode GDPR complying behavior into an automatic speech recognition system?
-		- What speech technologies can help automatic speech recognition and text to speech technologies comply with the GDPR?
-		- How to encode GDPR complying regulation into a system?
-		"""
-		output_example = """
-		- The paper is from 2010 or later.
-		- The paper mentions either GDPR, privacy, encryption, regulation or a similar word in combination with Automatic speech recognition or Text to speech. 
-		- The paper is deemed subjectively sufficiently contributing to (one of) the above research questions.
-		"""
+def auto_prompt(input_block_types: dict, output_block_types: dict, instructions=""):
+    input_block_names, input_block_types = zip(*input_block_types.items())
+    output_block_names, output_block_types = zip(*output_block_types.items())
 
-		# init agent 
-		super().__init__(role=role,
-					summary=summary,
-					input_block_types=input_block_types,
-					output_block_types=output_block_types,
-					input_block_names=input_block_names,
-					output_block_names=output_block_names,
-					input_example=input_example,
-					output_example=output_example,
-					algorithm=algorithm,
-					)
+    template = f"""
+You're a resolver that converts the input blocks {input_block_names} to output blocks {output_block_names}.
+
+CONVERT THESE INPUT BLOCKS:
+{input_block_types}
+
+TO THESE OUTPUT BLOCKS:
+{output_block_types}
+"""
+
+    return template
+
 
 if __name__ == "__main__":
 	
@@ -248,7 +154,7 @@ if __name__ == "__main__":
 
 
 	full_prompt = topic_agent.get_full_prompt(inp_block)
-	# print(full_prompt)
+	print(full_prompt)
 
 	# # Mock output
 	# research_questions = topic_agent.mock_call(inp_block)
@@ -259,18 +165,18 @@ if __name__ == "__main__":
 	research_questions = topic_agent(inp_block, llm=llm)
 	print(research_questions)
 
-	# ######
-	# # Agent 2
-	# # Show prompt
-	# criteria_agent = ResearchQuestionsToSearchCriteria()
+	######
+	# Agent 2
+	# Show prompt
+	criteria_agent = ResearchQuestionsToSearchCriteria()
 
-	# # Gets output block of agent 1 as input
+	# Gets output block of agent 1 as input
 	# search_criteria_prompt = criteria_agent.get_full_prompt(research_questions)
-	# # print(search_criteria_prompt)
+	# print(search_criteria_prompt)
 
-	# # Call agent with output of the previous agent
+	# Call agent with output of the previous agent
 
-	# # search_criteria = criteria_agent.mock_call(research_questions)
+	# search_criteria = criteria_agent.mock_call(research_questions)
 	# search_criteria = criteria_agent(research_questions, llm=llm)
 	# print("-----------")
 	# print(search_criteria)

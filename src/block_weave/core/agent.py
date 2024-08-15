@@ -44,7 +44,7 @@ class Agent:
         self.output_block_names = list(output_block_names)
 
         # TODO: format output blocks
-        self.prompt_template = self._format_prompt_template(prompt_template)
+        self.prompt_template = prompt_template #self._format_partial_prompt_template(prompt_template)
 
         # LLM to use if none is given in __call__
         self.default_llm = default_llm
@@ -142,49 +142,58 @@ class Agent:
         blocks = self._block_to_list(blocks)
 
         # Match variable names to input blocks
-        blocks_dict = self._get_dict_from_names_and_blocks(names=self.input_block_names,
+        input_blocks_dict = self._get_dict_from_names_and_blocks(names=self.input_block_names,
                                                 blocks=blocks)
 
         # # Activate blocks
         # for n, b in blocks_dict:
         #     blocks_dict[n] = b(name=n)
         # Only get content of blocks
-        for n, b in blocks_dict.items():
-            blocks_dict[n] = b.content
+        for n, b in input_blocks_dict.items():
+            input_blocks_dict[n] = b.content
+
+        output_blocks_dict = self._format_output_blocks_as_dict()
+
+        # Combine all blocks
+        blocks_dict = input_blocks_dict | output_blocks_dict
 
         # Get prompt for LLM
         full_prompt = self.prompt_template.format(**blocks_dict)
 
         return full_prompt
     
-    def _format_prompt_template(self, prompt_template: str):
-        """Fill in output blocks
-
-        Args:
-            prompt_template (str): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        input_block_types_dict = {name: "{"+name+"}" for name in self.input_block_names}
-
+    def _format_output_blocks_as_dict(self):
         output_blocks_dict = self._get_dict_from_names_and_blocks(names=self.output_block_names, 
                                                          blocks=self.output_block_types)
         
         # Fill in blocks
-        content = "ANSWER HERE"
+        placeholder_content = "ANSWER HERE"
         for n, bt in output_blocks_dict.items():
+            # Check if bt has a format parser
+            if bt.parse is not None:
+                content = bt.parse
+            else:
+                content=placeholder_content
+
             block = Block(block_type=bt,
                           content=content)
             output_blocks_dict[n] = block(name=n)
 
-        # Combine all blocks
-        blocks_dict = input_block_types_dict | output_blocks_dict
+        return output_blocks_dict
+    
+    def auto_prompt(self, instructions=""):
 
-        # Format template
-        format_prompt = prompt_template.format(**blocks_dict)
-        
-        return format_prompt
+        template = f"""
+You're a resolver that converts the input blocks {self.input_block_names} to output blocks {self.output_block_names}.
+
+CONVERT THESE INPUT BLOCKS:
+{{input_blocks}}
+
+TO THESE OUTPUT BLOCKS:
+{{output_blocks}}
+    """
+
+        return template
     
     @staticmethod
     def _block_to_list(blocks: Union[Block, List[Block]]):
